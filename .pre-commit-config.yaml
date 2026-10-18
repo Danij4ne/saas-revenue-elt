@@ -1,0 +1,28 @@
+# Local hygiene. Same tools CI will rerun; this file only sets *when*.
+# Versions come from pyproject.toml via `uv run` (not a second pin on GitHub).
+# Format is ruff, not black. sqlfluff lints dbt SQL; it does not rewrite it.
+#
+# Enable on this clone: uv run pre-commit install
+
+default_language_version:
+  python: python3.13
+
+repos:
+  - repo: local
+    hooks:
+      - id: ruff-check
+        name: ruff check
+        language: system
+        entry: uv run ruff check
+        types: [python]
+      - id: ruff-format
+        name: ruff format
+        language: system
+        entry: uv run ruff format
+        types: [python]
+      - id: sqlfluff-lint
+        name: sqlfluff lint
+        language: system
+        entry: uv run sqlfluff lint
+        files: ^dbt_project/(models|tests)/.*\.sql$
+        types: [sql]

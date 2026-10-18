@@ -1,0 +1,79 @@
+[project]
+name = "saas-revenue-elt"
+version = "0.1.0"
+description = "SaaS revenue ELT on GCP (Python load to GCS/BigQuery + dbt)."
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "dbt-bigquery>=1.11.1",
+    "google-cloud-bigquery>=3.41.0",
+    "google-cloud-storage>=3.1.1",
+    "pyarrow>=24.0.0",
+    "pydantic>=2.13.4",
+    "pydantic-settings>=2.14.1",
+    "pyyaml>=6.0.2",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.19.1",
+    "pre-commit>=4.6.2",
+    "pytest>=9.1.0",
+    "pytest-cov>=7.1.0",
+    "ruff>=0.15.17",
+    "sqlfluff>=4.3.0",
+    "types-PyYAML>=6.0.12",
+]
+
+# Project type gate (AGENTS.md, future CI): `uv run mypy src` must pass.
+[tool.mypy]
+python_version = "3.13"
+warn_unused_configs = true
+show_error_codes = true
+
+# GCP client libraries do not publish complete stubs; they are ignored
+# explicitly (not with a global ignore_missing_imports).
+# `follow_imports = "skip"` avoids the false [attr-defined] on
+# `from google.cloud import storage|bigquery` when the namespace exists without stubs.
+[[tool.mypy.overrides]]
+module = [
+    "google",
+    "google.*",
+]
+ignore_missing_imports = true
+follow_imports = "skip"
+
+# basedpyright = IDE help in Cursor/VS Code. The documented gate is mypy.
+# Without google-cloud stubs, we silence missing stubs so we do not contradict mypy.
+[tool.basedpyright]
+venvPath = "."
+venv = ".venv"
+pythonVersion = "3.13"
+reportMissingTypeStubs = false
+reportMissingImports = "none"
+
+# Lint (AGENTS.md / future CI): `uv run ruff check .`
+[tool.ruff]
+target-version = "py313"
+src = ["src"]
+line-length = 88
+
+[tool.ruff.lint]
+select = [
+    "E",  # pycodestyle errors
+    "F",  # pyflakes
+    "I",  # isort
+    "UP", # pyupgrade
+    "B",  # flake8-bugbear
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+
+# A-4: gate coverage on the pre-load validator only (not all of src/).
+[tool.coverage.run]
+source = ["src/validation"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
