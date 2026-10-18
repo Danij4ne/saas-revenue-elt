@@ -1,0 +1,66 @@
+# Secrets / local env
+.env
+.env.airflow
+*-credentials.json
+*-sa.json
+credentials.json
+
+# Python / tooling
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# IDE / OS
+.gitattributes
+AGENTS.md
+.cursor/
+.vscode/
+*.code-workspace
+.idea/
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Terraform
+terraform/.terraform/
+terraform/identity/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/identity/*.tfstate
+terraform/identity/*.tfstate.*
+terraform/crash.log
+terraform/override.tf
+terraform/override.tf.json
+terraform/*_override.tf
+terraform/*_override.tf.json
+terraform/terraform.tfvars
+terraform/terraform.tfvars.json
+terraform/envs/*.tfvars
+terraform/envs/*.tfvars.json
+terraform/identity/envs/*.tfvars
+terraform/identity/envs/*.tfvars.json
+# GCS backend: per-env files; templates: backend-*.hcl.example
+terraform/backend.hcl
+terraform/backend-*.hcl
+terraform/identity/backend-*.hcl
+
+# Airflow local: scheduler/task logs on the host bind mount
+/logs/
+
+# dbt
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/
+# The real profile lives in ~/.dbt/profiles.yml (outside the repo); if someone
+# copies it in by mistake, it must not be committed (profiles.yml.example should).
+dbt_project/profiles.yml
