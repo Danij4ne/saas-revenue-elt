@@ -1,0 +1,49 @@
+
+# Name your project! Project names should contain only lowercase characters
+# and underscores. A good package name should reflect your organization's
+# name or the intended use of these models
+name: 'saas_revenue'
+version: '1.0.0'
+
+# This setting configures which "profile" dbt uses for this project.
+profile: 'saas_revenue'
+
+# Analysis cutoff date (hard cap of the monthly spine). The data are a
+# historical snapshot that closes at the end of 2025; the spine must NOT depend on the
+# clock (current_date()) but on this declared date. See DECISIONS #9.
+vars:
+  as_of_date: "2025-12-31"
+
+# These configurations specify where dbt should look for different types of files.
+# The `model-paths` config, for example, states that models in this project can be
+# found in the "models/" directory. You probably won't need to change these!
+model-paths: ["models"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:         # directories to be removed by `dbt clean`
+  - "target"
+  - "dbt_packages"
+
+
+models:
+  saas_revenue:
+    staging:
+      +schema: staging
+      +materialized: view
+    intermediate:
+      +schema: intermediate
+      +materialized: table
+    marts:
+      +schema: marts
+      +materialized: table
+
+# Snapshots are not models: schema is not inherited from models:. Without
+# +schema they would land in the profile default dataset (staging). Terraform
+# declares the `snapshots` dataset; dbt still owns the SCD2 tables inside.
+# If the dataset already exists from an earlier `dbt snapshot`, Terraform imports it.
+snapshots:
+  saas_revenue:
+    +schema: snapshots

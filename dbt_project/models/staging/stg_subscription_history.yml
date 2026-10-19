@@ -1,0 +1,80 @@
+version: 2
+
+models:
+  - name: stg_subscription_history
+    description: >
+      1:1 cleanup of the raw subscription_history table. One row per
+      subscription_version_id (does not collapse version history).
+    tests:
+      # int_subscription_monthly QUALIFY order by valid_from desc: a tie is
+      # non-deterministic MRR. Native composite unique, not dbt_utils.
+      - unique:
+          name: unique_subscription_id_valid_from
+          column_name: "(subscription_id, valid_from)"
+      # At most one open SCD2 version per subscription (same idea as
+      # assert_snapshot_*_one_current_version).
+      - unique:
+          name: unique_open_version_per_subscription
+          column_name: subscription_id
+          config:
+            where: "valid_to is null"
+      # Overlapping [valid_from, valid_to) per subscription_id is a source
+      # error: QUALIFY would pick the latest valid_from and hide it.
+      # coalesce is required — the test rejects null bounds. gaps: allowed
+      # because a subscription may have holes if a version was dropped.
+      # zero_length_range_allowed: same contract as
+      # assert_subscription_history_date_order (valid_from <= valid_to).
+      # The package default (false) would reject equals and contradict that date-order test.
+      - dbt_utils.mutually_exclusive_ranges:
+          arguments:
+            lower_bound_column: valid_from
+            upper_bound_column: "coalesce(valid_to, timestamp '2999-01-01')"
+            partition_by: subscription_id
+            gaps: allowed
+            zero_length_range_allowed: true
+    columns:
+      - name: subscription_version_id
+        tests:
+          - unique
+          - not_null
+      - name: subscription_id
+        tests:
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: plan_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_plans')
+                field: plan_id
+      - name: quantity
+        tests:
+          - greater_than_zero
+          # Null skips greater_than_zero and becomes coalesce(mrr_base, 0)
+          # downstream (understated MRR, still green). Warn: the contract
+          # keeps nulls and flags them on int_customer_revenue_monthly.
+          - not_null:
+              config:
+                severity: warn
+      - name: valid_from
+        tests:
+          - not_null
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['active', 'canceled', 'past_due', 'paused']
+      - name: started_at
+        tests:
+          - not_null
+      - name: updated_at
+        tests:
+          - not_null

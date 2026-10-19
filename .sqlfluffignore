@@ -1,0 +1,4 @@
+# Compiled / installed dbt artefacts — not authored SQL.
+dbt_project/target/
+dbt_project/dbt_packages/
+dbt_project/logs/

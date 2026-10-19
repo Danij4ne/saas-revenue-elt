@@ -1,0 +1,15 @@
+# SQL lint for dbt. Dialect matches BigQuery. Templater is Jinja with
+# dbt builtins (ref/source), not sqlfluff-templater-dbt (needs a profile).
+# Pre-commit only lints models/ and tests/; this file is the rule source.
+
+[sqlfluff]
+dialect = bigquery
+templater = jinja
+max_line_length = 88
+# Layout/style would rewrite every mart. Keep parse + remaining safety
+# rules; CI can tighten this list later. Codes we saw on the current SQL:
+exclude_rules = AL01, AL04, LT01, LT02, LT05, LT09, RF02, ST01, ST06, ST09
+
+[sqlfluff:templater:jinja]
+apply_dbt_builtins = True
+load_macros_from_path = dbt_project/macros

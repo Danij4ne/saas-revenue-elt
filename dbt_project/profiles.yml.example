@@ -1,0 +1,28 @@
+# dbt profile for local runs. Copy it outside the repo; do not put the
+# project id in this file.
+#   Linux/macOS: ~/.dbt/profiles.yml
+#   Windows:     %USERPROFILE%\.dbt\profiles.yml
+# The Cloud Run Job copies this same file to /app/dbt_profiles/profiles.yml
+# and sets DBT_PROFILES_DIR there (DECISIONS #16). Not ~/.dbt. Not Secret Manager.
+
+saas_revenue:
+  target: dev
+  outputs:
+    dev:
+      type: bigquery
+      method: oauth
+      project: "{{ env_var('GCP_PROJECT_ID') }}"
+      dataset: staging
+      location: "{{ env_var('GCP_LOCATION', 'EU') }}"
+      threads: 4
+      priority: interactive
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+
+# saas_revenue: profile name. Must match `profile:` in dbt_project.yml.
+# project / location: filled at run time from .env
+#   (uv run --env-file .env dbt debug --project-dir dbt_project).
+# method oauth: Application Default Credentials
+#   (gcloud auth application-default login).
+# dataset: where seeds land. staging, so a mistake never writes to raw.
+#   Do not change it when adding snapshots; those set +schema in dbt_project.yml.
