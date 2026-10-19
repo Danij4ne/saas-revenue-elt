@@ -1,0 +1,19 @@
+retry:
+  defaults:
+    initial_delay_seconds: 1.0
+    multiplier: 2.0
+    max_delay_seconds: 60.0
+
+  gcs:
+    retry_deadline_seconds: 120.0
+    operation_timeout_seconds: 60.0
+
+  bigquery:
+    retry_deadline_seconds: 600.0
+    operation_timeout_seconds: 300.0
+
+logging:
+  level: INFO
+  file: null
+  max_bytes: 2000000
+  backup_count: 5

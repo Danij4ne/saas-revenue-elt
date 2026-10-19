@@ -1,0 +1,93 @@
+raw:
+  local_base_dir: data/sources
+  file_format: parquet
+  gcs_prefix: raw
+  landing_gcs_prefix: landing
+
+  gcs_layout:
+    strategy: partitioned_by_run_date_and_run_id
+    date_partition_key: dt
+    include_run_id: true
+
+  load_metadata:
+    include_run_date: true
+    include_run_id: true
+    include_ingested_at: true
+
+  default_write_disposition: WRITE_APPEND
+
+  tables:
+    customers:
+      description: Customer master data with one row per customer company.
+      grain: one row per customer_id
+      file_name: customers.parquet
+      bq_table: customers
+      required_columns:
+        - customer_id
+        - company_name
+        - country
+        - industry
+        - company_size
+        - created_at
+        - is_deleted
+
+    plans:
+      description: SaaS plan catalog with one row per plan.
+      grain: one row per plan_id
+      file_name: plans.parquet
+      bq_table: plans
+      required_columns:
+        - plan_id
+        - plan_name
+        - billing_period
+        - list_price
+        - currency
+        - is_active
+        - created_at
+
+    subscription_history:
+      description: Subscription history as a versioned table with one row per subscription version.
+      grain: one row per subscription_version_id
+      file_name: subscription_history.parquet
+      bq_table: subscription_history
+      required_columns:
+        - subscription_version_id
+        - subscription_id
+        - customer_id
+        - plan_id
+        - status
+        - quantity
+        - valid_from
+        - valid_to
+        - started_at
+        - canceled_at
+        - updated_at
+
+    invoices:
+      description: Invoice facts with one row per invoice.
+      grain: one row per invoice_id
+      file_name: invoices.parquet
+      bq_table: invoices
+      required_columns:
+        - invoice_id
+        - subscription_id
+        - customer_id
+        - invoice_date
+        - amount_due
+        - currency
+        - status
+        - due_date
+
+    payments:
+      description: Payment facts with one row per payment event.
+      grain: one row per payment_id
+      file_name: payments.parquet
+      bq_table: payments
+      required_columns:
+        - payment_id
+        - invoice_id
+        - paid_at
+        - amount_paid
+        - currency
+        - status
+        - payment_method
