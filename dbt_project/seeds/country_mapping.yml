@@ -1,0 +1,19 @@
+version: 2
+
+seeds:
+  - name: country_mapping
+    description: >
+      Canonical country codes/names keyed by the raw country string after
+      lower(trim). A duplicate raw_country fans out int_customers_enriched
+      and surfaces as a unique failure on customer_id downstream.
+    columns:
+      - name: raw_country
+        tests:
+          - unique
+          - not_null
+      - name: country_code
+        tests:
+          - not_null
+      - name: country_name
+        tests:
+          - not_null

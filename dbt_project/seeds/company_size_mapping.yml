@@ -1,0 +1,18 @@
+version: 2
+
+seeds:
+  - name: company_size_mapping
+    description: >
+      Canonical size_segment keyed by raw company_size after lower(trim).
+      Blank or missing source values are not seed rows: they miss the join
+      and become unknown via coalesce in int_customers_enriched. A CSV
+      empty cell loads as NULL in BigQuery, so a blank lookup key is not
+      a valid unique/not_null dictionary row.
+    columns:
+      - name: raw_company_size
+        tests:
+          - unique
+          - not_null
+      - name: size_segment
+        tests:
+          - not_null
