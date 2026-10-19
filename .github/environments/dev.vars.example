@@ -1,0 +1,30 @@
+# GitHub Environment `dev` variables for deploy.yml.
+# These are identifiers: create them as vars.*, not secrets.*.
+# Fill them after the local apply of terraform/identity on the dev backend.
+# deploy.yml never applies terraform/identity. On the runner it writes these
+# values into terraform/backend-dev.hcl and terraform/envs/dev.tfvars.
+# github_repository comes from the GitHub context; environment is hardcoded to dev.
+
+GCP_PROJECT_ID=
+GCP_LAKE_BUCKET=
+TFSTATE_BUCKET=
+GCP_REGION=
+GCP_LOCATION=
+GCP_WIF_PROVIDER=
+GCP_DEPLOY_SA=
+GCP_ALERT_EMAIL=
+GCP_PROD_DEPLOY_SA=
+
+# GCP_PROJECT_ID: sandbox project. Same as dev.tfvars gcp_project_id.
+# GCP_LAKE_BUCKET: data lake, not the tfstate bucket. Same as bucket_name.
+# TFSTATE_BUCKET: same as tfstate_bucket_name and backend-dev.hcl bucket.
+# GCP_REGION / GCP_LOCATION: same as gcp_region / gcp_location.
+# GCP_WIF_PROVIDER: terraform output -raw github_wif_provider_name
+#   projects/<NUMBER>/locations/global/workloadIdentityPools/github-actions/providers/github
+# GCP_DEPLOY_SA: terraform output -raw github_deploy_service_account_email
+#   github-deploy@<dev-project>.iam.gserviceaccount.com. Not elt-pipeline.
+# GCP_ALERT_EMAIL: Job-failed notification (var.alert_email). Not a secret.
+# GCP_PROD_DEPLOY_SA: prod github-deploy email, not the dev SA.
+#   deploy.yml writes ar_promote_reader_member = serviceAccount:<this>
+#   so image-prod can pull the sandbox digest.
+#   Example: github-deploy@<prod-project>.iam.gserviceaccount.com

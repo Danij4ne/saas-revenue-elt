@@ -1,0 +1,211 @@
+# CD deploys infra and the app image; it never executes the ELT.
+# Dev path: build/push the app image, then terraform apply so the Job pins this SHA.
+# Prod path: copy the dev digest, then terraform-prod runs behind an Environment reviewer.
+# terraform/identity is applied locally with ADC; this workflow only applies the app root.
+# No second docker build, no `gcloud run jobs execute/update`, and no Scheduler `:run`.
+# Detailed operating steps, required vars, and first-run setup live in docs/OPERATIONS.md.
+
+name: deploy
+
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "docs/**"
+      - "dags/**"
+      - "docker/**"
+      - "tests/**"
+      - "Makefile"
+      - ".pre-commit-config.yaml"
+      - ".sqlfluff"
+      - ".sqlfluffignore"
+      - ".github/workflows/ci.yml"
+      - ".github/dependabot.yml"
+      - ".github/environments/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  image:
+    environment: dev
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/saas-revenue-app/saas-revenue-app:${{ github.sha }}
+    outputs:
+      image_ref: ${{ steps.push_image.outputs.image_ref }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Build and push app image
+        id: push_image
+        run: |
+          set -euo pipefail
+          gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+          docker build -t "${IMAGE}" .
+          docker push "${IMAGE}"
+          IMAGE_REF="$(docker image inspect --format='{{index .RepoDigests 0}}' "${IMAGE}")"
+          echo "image_ref=${IMAGE_REF}" >> "${GITHUB_OUTPUT}"
+
+  terraform:
+    needs: image
+    environment: dev
+    concurrency:
+      group: deploy-dev
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_IN_AUTOMATION: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.5"
+          terraform_wrapper: false
+
+      - name: Write backend-dev.hcl and envs/dev.tfvars from Environment vars
+        env:
+          TF_GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          TF_LAKE_BUCKET: ${{ vars.GCP_LAKE_BUCKET }}
+          TF_TFSTATE_BUCKET: ${{ vars.TFSTATE_BUCKET }}
+          TF_GCP_REGION: ${{ vars.GCP_REGION }}
+          TF_GCP_LOCATION: ${{ vars.GCP_LOCATION }}
+          TF_GITHUB_REPOSITORY: ${{ github.repository }}
+          TF_APP_IMAGE_TAG: ${{ github.sha }}
+          TF_ALERT_EMAIL: ${{ vars.GCP_ALERT_EMAIL }}
+          TF_PROD_DEPLOY_SA: ${{ vars.GCP_PROD_DEPLOY_SA }}
+        run: |
+          set -euo pipefail
+          : "${TF_PROD_DEPLOY_SA:?GCP_PROD_DEPLOY_SA must be set on Environment dev (prod github-deploy email)}"
+          cat > backend-dev.hcl <<EOF
+          bucket = "${TF_TFSTATE_BUCKET}"
+          prefix = "saas-revenue-elt/dev"
+          EOF
+          cat > envs/dev.tfvars <<EOF
+          gcp_project_id             = "${TF_GCP_PROJECT_ID}"
+          bucket_name                = "${TF_LAKE_BUCKET}"
+          gcp_region                 = "${TF_GCP_REGION}"
+          gcp_location               = "${TF_GCP_LOCATION}"
+          environment                = "dev"
+          github_repository          = "${TF_GITHUB_REPOSITORY}"
+          tfstate_bucket_name        = "${TF_TFSTATE_BUCKET}"
+          app_image_tag              = "${TF_APP_IMAGE_TAG}"
+          alert_email                = "${TF_ALERT_EMAIL}"
+          ar_promote_reader_member   = "serviceAccount:${TF_PROD_DEPLOY_SA}"
+          EOF
+
+      - run: terraform init -input=false -backend-config=backend-dev.hcl
+      - run: terraform plan -input=false -var-file=envs/dev.tfvars -out=tfplan
+      - run: terraform apply -input=false tfplan
+
+  image-prod:
+    needs: [image, terraform]
+    environment: prod
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      IMAGE: ${{ vars.GCP_REGION }}-docker.pkg.dev/${{ vars.GCP_PROJECT_ID }}/saas-revenue-app/saas-revenue-app:${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Promote app image from dev digest
+        env:
+          SOURCE_REF: ${{ needs.image.outputs.image_ref }}
+        run: |
+          set -euo pipefail
+          gcloud auth configure-docker "${{ vars.GCP_REGION }}-docker.pkg.dev" --quiet
+          docker pull "${SOURCE_REF}"
+          docker tag "${SOURCE_REF}" "${IMAGE}"
+          docker push "${IMAGE}"
+
+  terraform-prod:
+    needs: image-prod
+    environment: prod
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_IN_AUTOMATION: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SA }}
+
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.5"
+          terraform_wrapper: false
+
+      - name: Write backend-prod.hcl and envs/prod.tfvars from Environment vars
+        env:
+          TF_GCP_PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+          TF_LAKE_BUCKET: ${{ vars.GCP_LAKE_BUCKET }}
+          TF_TFSTATE_BUCKET: ${{ vars.TFSTATE_BUCKET }}
+          TF_GCP_REGION: ${{ vars.GCP_REGION }}
+          TF_GCP_LOCATION: ${{ vars.GCP_LOCATION }}
+          TF_GITHUB_REPOSITORY: ${{ github.repository }}
+          TF_APP_IMAGE_TAG: ${{ github.sha }}
+          TF_ALERT_EMAIL: ${{ vars.GCP_ALERT_EMAIL }}
+        run: |
+          set -euo pipefail
+          cat > backend-prod.hcl <<EOF
+          bucket = "${TF_TFSTATE_BUCKET}"
+          prefix = "saas-revenue-elt/prod"
+          EOF
+          cat > envs/prod.tfvars <<EOF
+          gcp_project_id      = "${TF_GCP_PROJECT_ID}"
+          bucket_name         = "${TF_LAKE_BUCKET}"
+          gcp_region          = "${TF_GCP_REGION}"
+          gcp_location        = "${TF_GCP_LOCATION}"
+          environment         = "prod"
+          github_repository   = "${TF_GITHUB_REPOSITORY}"
+          tfstate_bucket_name = "${TF_TFSTATE_BUCKET}"
+          app_image_tag       = "${TF_APP_IMAGE_TAG}"
+          alert_email         = "${TF_ALERT_EMAIL}"
+          ar_promote_reader_member = ""
+          EOF
+
+      - run: terraform init -input=false -backend-config=backend-prod.hcl
+      - run: terraform plan -input=false -var-file=envs/prod.tfvars -out=tfplan
+      - run: terraform apply -input=false tfplan
