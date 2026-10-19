@@ -1,0 +1,46 @@
+# Dependabot (DECISIONS #15): same ecosystems, weekly schedule, and groups.
+# open-pull-requests-limit 0 pauses version-update PRs. Security update PRs
+# are a separate GitHub setting and are not stopped here. Set the limit back
+# to 5 to open them again; ci.yml verifies them.
+# Not a workflow. No automerge. Merge to main may run deploy.yml (dev only).
+# No terraform ecosystem (provider bump → apply on merge). No dbt packages.yml
+# (no Dependabot ecosystem; bump dbt_utils by hand).
+
+version: 2
+
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      python-minor:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    groups:
+      actions:
+        applies-to: version-updates
+        update-types:
+          - minor
+          - patch
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+
+  - package-ecosystem: docker
+    directory: /docker/airflow
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0

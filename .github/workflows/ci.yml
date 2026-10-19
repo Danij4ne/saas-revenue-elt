@@ -1,0 +1,88 @@
+# Verify only (DECISIONS #15). Does not apply Terraform, load GCS/BQ, or
+# build images. terraform plan needs GCS state + a sandbox identity — later,
+# when that identity exists. fmt/validate run with -backend=false (no secrets).
+#
+# Same lint/test commands as the Makefile. dbt: deps (dbt_utils; packages
+# dir is gitignored) then parse with profiles.yml.example and dummy
+# GCP_PROJECT_ID; it must not materialize models.
+# Jobs cap timeout-minutes (GitHub default is 6h). Actions stay tag-pinned.
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --frozen --all-groups
+      - run: make lint
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --frozen --all-groups
+      - run: make test
+
+  terraform:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: terraform
+    env:
+      TF_IN_AUTOMATION: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.15.5"
+          terraform_wrapper: false
+      - run: terraform fmt -check -recursive
+      - run: terraform init -backend=false -input=false
+      - run: terraform validate
+      - name: Validate identity root
+        working-directory: terraform/identity
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+
+  dbt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GCP_PROJECT_ID: ci-parse-only
+      GCP_LOCATION: EU
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v4
+        with:
+          python-version: "3.13"
+          enable-cache: true
+      - run: uv sync --frozen --all-groups
+      - name: Install dbt profile from the committed example
+        run: mkdir -p ~/.dbt && cp dbt_project/profiles.yml.example ~/.dbt/profiles.yml
+      - run: uv run dbt deps --project-dir dbt_project
+      - run: uv run dbt parse --project-dir dbt_project
