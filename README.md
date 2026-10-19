@@ -1,11 +1,50 @@
 # SaaS Revenue ELT
 
-ELT pipeline for a SaaS that loads customers, plans, subscriptions, invoices,  
-and payments into BigQuery. Revenue metrics (`MRR`, `ARR`, `ARPU`, churn,  
-movements, and `NRR`) come from the subscription and the catalog price.  
-Invoicing and collection do not change them.
-
 ![Data flow](docs/images/data_flow.png)
+
+## The problem
+
+A SaaS finance team needs a monthly revenue number that does not move because an invoice is late or a payment fails. This pipeline loads customers, plans, subscriptions, invoices, and payments, and publishes revenue from the subscription and the catalog price. Invoices and payments are ingested, but they do not define the metric.
+
+## Architecture
+
+Parquet files are validated, stamped with `_run_date`, `_run_id`, and `_ingested_at` before upload, stored in GCS, and appended to BigQuery `raw`. Those metadata fields let the pipeline track which run produced each row, because the BigQuery load cannot add them later. dbt then builds `staging`, `intermediate`, and `marts`.
+
+In the cloud, Cloud Scheduler starts a Cloud Run Job that runs `python -m src run-all`. Airflow in Docker is a local lab with the same shape, not the production orchestrator. Terraform owns the lake, the datasets, the Job, and the identity. A merge to `main` deploys the image and the infrastructure. It does not execute the load.
+
+Detail is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Decisions worth defending
+
+Three choices that change what the numbers mean. The full record is in [docs/DECISIONS.md](docs/DECISIONS.md).
+
+- **MRR uses today's catalog price.** Past months are priced with the plan's current `list_price`, because the plans file keeps one current row per plan, not a price history. `snapshot_plans` exists, but no mart reads it yet: a snapshot only records changes from the day it starts running, so it cannot recover the prices of 2023–2025. `valid_from` and `valid_to` say when a subscription was active, not what the plan cost. If Pro goes from 20 to 30, the whole series is recalculated at 30. The snapshot becomes useful once a real price change has been recorded.
+- `raw` **is append-only.** Each run writes `_run_date`, `_run_id`, and `_ingested_at` and lands in its own GCS path. This preserves load history and avoids silent overwrites. Business history such as price or country is not modeled in the load layer. A retry uses a new `run_id`, because appending the same job twice would duplicate rows.
+- **The monthly spine stops at `as_of_date`.** The source dump ends at `2025-12-31`, so the models are capped there instead of using the machine clock. This keeps churn and NRR reproducible: running the same snapshot in 2026 does not create extra empty months. If a row appears after the cutoff, the tests fail instead of stretching the series silently.
+
+
+
+## What it publishes
+
+The marts published today are single-currency `EUR`:
+
+- `mart_revenue_monthly`: MRR, ARR, ARPU, active customers, and subscriptions with null quantity per month.
+- `mart_mrr_movements`: `new`, `reactivation`, `expansion`, `contraction`, `churn`, and `flat` movements per customer-month.
+- `mart_customer_churn`: logo churn, monetary churn, expansion, and contraction per month.
+- `mart_nrr`: 12-month `NRR` by `base_month` cohort.
+
+The published contract for grain, metrics, compatibility, PII, and SLA is in [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md).
+
+## How to check it
+
+The local checks do not need a cloud project: `uv run pytest`, and step 5 of the Quick start, which validates the parquet files against the contract. With a configured `.env` file and Google Application Default Credentials, `dbt build` runs the warehouse tests. The command list below is that path. Suites are in [docs/TESTING.md](docs/TESTING.md).
+
+## What I would do next
+
+- Connect `snapshot_plans` to MRR only after a real price change exists to reconstruct.
+- Keep the published marts as full-refresh tables until the source arrives as a real delta. Once the ingestion pattern and the data volume justify it, incremental models would be the next optimization step.
+
+
 
 ## Stack
 
@@ -20,18 +59,8 @@ Invoicing and collection do not change them.
 
 ## What this repo does
 
-The project flow is:
-
-1. Validate raw parquets against the declared contract.
-2. Enrich them with technical load metadata.
-3. Upload them to GCS and load them into BigQuery `raw` with `WRITE_APPEND`.
-4. Transform them with dbt by layer: `staging` -> `intermediate` -> `marts`.
-
-Important design rules:
-
-- Business history does not live in `raw`; `raw` is append-only with technical metadata.
+- The orchestrator coordinates. Business logic stays in Python and dbt.
 - dbt snapshots exist for SCD2, but published marts still read `stg_*`, not `snapshot_*`.
-- The orchestrator coordinates; business logic stays in Python and dbt.
 
 
 
@@ -191,20 +220,6 @@ docker compose down
 
 Detailed operations by environment, backend, and deploy are in
 `docs/OPERATIONS.md`.
-
-## Published outputs
-
-The marts published today are:
-
-- `mart_revenue_monthly`: MRR, ARR, ARPU, active customers, and subscriptions with null quantity per month.
-- `mart_mrr_movements`: `new`, `reactivation`, `expansion`,
-`contraction`, `churn`, and `flat` movements per customer-month.
-- `mart_customer_churn`: logo churn, monetary churn, expansion, and contraction
-per month.
-- `mart_nrr`: 12-month `NRR` by `base_month` cohort.
-
-The published contract for grain, metrics, compatibility, PII, and SLA is in
-`docs/DATA_CONTRACT.md`.
 
 ## Repo structure
 
