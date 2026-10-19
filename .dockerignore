@@ -1,0 +1,35 @@
+# Build context is the repo root (docker build .). Secrets and local junk
+# must not enter the app image. dags/ and docker/airflow are Airflow-only.
+
+.git
+.venv
+.env
+.env.*
+!.env.example
+**/*credentials*.json
+**/*-sa.json
+
+dags
+docker
+terraform
+tests
+docs
+.cursor
+
+*.md
+!README.md
+
+dbt_project/target
+dbt_project/logs
+dbt_project/dbt_packages
+dbt_project/profiles.yml
+
+data
+
+.mypy_cache
+.ruff_cache
+.pytest_cache
+__pycache__
+*.pyc
+.coverage
+htmlcov
