@@ -80,6 +80,16 @@ uv run mypy src
 
 ### 4. Check dbt without materializing
 
+Create the local config before these commands. Both files are gitignored.
+
+```bash
+cp .env.example .env
+mkdir -p ~/.dbt
+cp dbt_project/profiles.yml.example ~/.dbt/profiles.yml
+```
+
+Edit `.env` and set `GCP_PROJECT_ID`, `GCS_BUCKET_NAME`, and `ENVIRONMENT` to the same stack. On Windows, copy the profile to `%USERPROFILE%\.dbt\profiles.yml`. The placeholders in `.env.example` are enough for step 5, which only checks local parquet. `dbt debug` opens a real BigQuery connection, so it also needs `gcloud auth application-default login` and a project you can access. `dbt compile` only renders SQL. Commands that load data stay in `docs/OPERATIONS.md`.
+
 ```bash
 uv run --env-file .env dbt debug --project-dir dbt_project
 uv run --env-file .env dbt compile --project-dir dbt_project
@@ -170,7 +180,10 @@ docker build -t saas-revenue-app .
 
 Local Airflow:
 
+Copy `.env.airflow.example` to `.env.airflow` and fill `AIRFLOW__CORE__FERNET_KEY`, `AIRFLOW__API_AUTH__JWT_SECRET`, `HOST_PROJECT_DIR`, and `HOST_GCP_ADC` as the comments in that example describe. Compose does not start without this file. Unpausing the DAG hits real GCS and BigQuery.
+
 ```bash
+cp .env.airflow.example .env.airflow
 docker build -t saas-revenue-airflow -f docker/airflow/Dockerfile docker/airflow
 docker compose up --build
 docker compose down
