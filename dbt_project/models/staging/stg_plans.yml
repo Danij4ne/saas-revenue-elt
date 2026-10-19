@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: stg_plans
+    description: >
+      1:1 cleanup of the raw plans table. One row per plan_id.
+    columns:
+      - name: plan_id
+        tests:
+          - unique
+          - not_null
+      - name: list_price
+        description: Plan list price; must be > 0.
+        tests:
+          - not_null
+          - greater_than_zero
+      - name: billing_period
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['month', 'year']
+      - name: currency
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['EUR']
+      - name: is_active
+        tests:
+          - not_null
+      - name: created_at
+        tests:
+          - not_null

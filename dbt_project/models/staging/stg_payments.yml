@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: stg_payments
+    description: >
+      1:1 cleanup of the raw payments table. One row per payment_id.
+    columns:
+      - name: payment_id
+        tests:
+          - unique
+          - not_null
+      - name: invoice_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_invoices')
+                field: invoice_id
+      - name: amount_paid
+        tests:
+          - not_null
+      - name: paid_at
+        tests:
+          - not_null
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['succeeded', 'failed', 'refunded']
+      - name: payment_method
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['card', 'bank_transfer', 'stripe', 'paypal']
+      - name: currency
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['EUR']

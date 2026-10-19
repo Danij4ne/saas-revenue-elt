@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: stg_customers
+    description: >
+      1:1 cleanup of the raw customers table. One row per customer_id
+      (dedup by raw technical metadata).
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+      - name: country
+        tests:
+          # Unmapped values become 'unknown' in int_customers_enriched;
+          # that value is accepted, so a bad raw country is otherwise silent.
+          - relationships:
+              arguments:
+                to: ref('country_mapping')
+                field: raw_country
+              config:
+                severity: warn
+      - name: company_size
+        tests:
+          - relationships:
+              arguments:
+                to: ref('company_size_mapping')
+                field: raw_company_size
+              config:
+                severity: warn
+      - name: created_at
+        tests:
+          - not_null
+      - name: is_deleted
+        tests:
+          - not_null

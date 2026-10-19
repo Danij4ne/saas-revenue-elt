@@ -1,0 +1,50 @@
+version: 2
+
+models:
+  - name: stg_invoices
+    description: >
+      1:1 cleanup of the raw invoices table. One row per invoice_id.
+    columns:
+      - name: invoice_id
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+      - name: subscription_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_subscription_history')
+                field: subscription_id
+      - name: amount_due
+        description: Amount due; must be > 0.
+        tests:
+          - not_null
+          - greater_than_zero
+      - name: invoice_date
+        tests:
+          - not_null
+      - name: due_date
+        tests:
+          - not_null:
+              config:
+                where: "status != 'draft'"
+      - name: status
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['paid', 'open', 'uncollectible', 'void', 'draft']
+      - name: currency
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['EUR']
