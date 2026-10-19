@@ -1,0 +1,29 @@
+version: 2
+
+snapshots:
+  - name: snapshot_customers
+    description: >
+      SCD2 of customer attributes that the source does not version
+      (country, industry, company_size, is_deleted, company_name).
+      One row per customer_id version; current version has dbt_valid_to null.
+      Stores staging raw keys, not seed-mapped region/size_segment.
+      Marts still read int_customers_enriched (current attributes).
+    columns:
+      - name: dbt_scd_id
+        description: Technical PK of this SCD2 version.
+        tests:
+          - unique
+          - not_null
+      - name: customer_id
+        description: Customer identity. Not unique across versions.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_customers')
+                field: customer_id
+              config:
+                where: "dbt_valid_to is null"
+      - name: dbt_valid_from
+        tests:
+          - not_null

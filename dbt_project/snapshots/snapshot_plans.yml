@@ -1,0 +1,28 @@
+version: 2
+
+snapshots:
+  - name: snapshot_plans
+    description: >
+      SCD2 of plan catalog attributes that the source does not version.
+      One row per plan_id version; current version has dbt_valid_to null.
+      Does not reconstruct history before the first dbt snapshot run.
+      Marts still read stg_plans (current price), not this snapshot.
+    columns:
+      - name: dbt_scd_id
+        description: Technical PK of this SCD2 version.
+        tests:
+          - unique
+          - not_null
+      - name: plan_id
+        description: Plan identity. Not unique across versions.
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_plans')
+                field: plan_id
+              config:
+                where: "dbt_valid_to is null"
+      - name: dbt_valid_from
+        tests:
+          - not_null
