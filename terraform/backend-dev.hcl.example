@@ -1,0 +1,9 @@
+# Remote state for the dev app root. Copy to backend-dev.hcl (gitignored).
+# Dedicated tfstate bucket: not the prod bucket and not the data lake.
+# Auth is Application Default Credentials. deploy.yml rewrites this file
+# on the runner from Environment vars. Do not apply without an explicit OK.
+
+bucket = "your-unique-dev-tfstate-bucket"
+prefix = "saas-revenue-elt/dev"
+
+# Do not change prefix. Switch environments with init -reconfigure, not -migrate-state.

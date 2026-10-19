@@ -1,0 +1,38 @@
+# Inputs for the prod app root. Copy to envs/prod.tfvars (gitignored).
+# Data-bearing stack: the lake and the datasets live here. Tfstate is a
+# separate bucket. Do not keep terraform.tfvars in terraform/: Terraform
+# auto-loads it and mixes it with -var-file.
+
+gcp_project_id       = "your-prod-project-id"
+bucket_name          = "your-unique-prod-lake-bucket"
+gcp_region           = "europe-west1"
+gcp_location         = "EU"
+bucket_storage_class = "STANDARD"
+environment          = "prod"
+github_repository    = "your-github-owner/saas-revenue-elt"
+tfstate_bucket_name  = "your-unique-prod-tfstate-bucket"
+app_image_tag        = "replace-with-pushed-image-tag"
+alert_email          = "you@example.com"
+
+# bucket_name is the data lake, not the tfstate bucket.
+# app_image_tag: SHA already pushed to Artifact Registry. CD writes github.sha.
+# alert_email is an identifier, not a secret.
+# ar_promote_reader_member stays empty here. Set only in dev.
+# ar_promote_reader_member = ""
+#
+# Defaults; uncomment only to override.
+# pipeline_sa_account_id = "elt-pipeline"
+# cloud_run_job_name = "saas-revenue-elt"
+# github_deploy_sa_account_id = "github-deploy"
+# artifact_registry_repository_id = "saas-revenue-app"
+# scheduler_sa_account_id = "elt-scheduler"
+# scheduler_job_name      = "saas-revenue-elt-daily"
+# scheduler_schedule      = "0 9 * * *"
+# scheduler_time_zone     = "Etc/UTC"
+# scheduler_paused        = true
+# lake_lifecycle_object_prefix         = "raw/"
+# lake_lifecycle_nearline_age_days     = 30
+# lake_lifecycle_coldline_age_days     = 90
+# lake_lifecycle_noncurrent_days       = 7
+# lake_lifecycle_abort_incomplete_days = 1
+# raw_partition_expiration_days        = 365

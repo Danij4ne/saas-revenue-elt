@@ -1,0 +1,8 @@
+# Remote state for the prod app root. Copy to backend-prod.hcl (gitignored).
+# Dedicated tfstate bucket: not the dev bucket and not the data lake.
+# Auth is Application Default Credentials. Do not apply without an explicit OK.
+
+bucket = "your-unique-prod-tfstate-bucket"
+prefix = "saas-revenue-elt/prod"
+
+# Do not change prefix. Switch environments with init -reconfigure, not -migrate-state.

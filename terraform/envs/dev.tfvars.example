@@ -1,0 +1,38 @@
+# Inputs for the dev app root. Copy to envs/dev.tfvars (gitignored).
+# Empty sandbox: a different GCP project and lake bucket from prod.
+# Dataset ids stay the same. Do not keep terraform.tfvars in terraform/:
+# Terraform auto-loads it and mixes it with -var-file.
+
+gcp_project_id           = "your-dev-project-id"
+bucket_name              = "your-unique-dev-lake-bucket"
+gcp_region               = "europe-west1"
+gcp_location             = "EU"
+bucket_storage_class     = "STANDARD"
+environment              = "dev"
+github_repository        = "your-github-owner/saas-revenue-elt"
+tfstate_bucket_name      = "your-unique-dev-tfstate-bucket"
+app_image_tag            = "replace-with-pushed-image-tag"
+alert_email              = "you@example.com"
+ar_promote_reader_member = "serviceAccount:github-deploy@your-prod-project-id.iam.gserviceaccount.com"
+
+# bucket_name is the data lake, not the tfstate bucket.
+# app_image_tag: SHA already pushed to Artifact Registry. CD writes github.sha.
+# alert_email is an identifier, not a secret.
+# ar_promote_reader_member: prod github-deploy, so image-prod can pull this digest.
+#
+# Defaults; uncomment only to override.
+# pipeline_sa_account_id = "elt-pipeline"
+# cloud_run_job_name = "saas-revenue-elt"
+# github_deploy_sa_account_id = "github-deploy"
+# artifact_registry_repository_id = "saas-revenue-app"
+# scheduler_sa_account_id = "elt-scheduler"
+# scheduler_job_name      = "saas-revenue-elt-daily"
+# scheduler_schedule      = "0 9 * * *"
+# scheduler_time_zone     = "Etc/UTC"
+# scheduler_paused        = true
+# lake_lifecycle_object_prefix         = "raw/"
+# lake_lifecycle_nearline_age_days     = 30
+# lake_lifecycle_coldline_age_days     = 90
+# lake_lifecycle_noncurrent_days       = 7
+# lake_lifecycle_abort_incomplete_days = 1
+# raw_partition_expiration_days        = 365
