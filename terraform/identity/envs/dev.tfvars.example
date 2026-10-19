@@ -1,0 +1,8 @@
+# Inputs for the dev identity root (WIF and IAM). Copy to envs/dev.tfvars
+# (gitignored). Ids must match terraform/envs/dev.tfvars for the same GCP
+# project. Apply with ADC, not GitHub Actions.
+
+gcp_project_id      = "your-dev-project-id"
+gcp_region          = "europe-west1"
+github_repository   = "your-github-owner/saas-revenue-elt"
+tfstate_bucket_name = "your-unique-dev-tfstate-bucket"

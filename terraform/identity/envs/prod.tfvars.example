@@ -1,0 +1,12 @@
+# Inputs for the prod identity root (WIF and IAM). Copy to envs/prod.tfvars
+# (gitignored). Ids must match terraform/envs/prod.tfvars for the same GCP
+# project. Apply with ADC, not GitHub Actions.
+
+gcp_project_id      = "your-prod-project-id"
+gcp_region          = "europe-west1"
+github_repository   = "your-github-owner/saas-revenue-elt"
+tfstate_bucket_name = "your-unique-prod-tfstate-bucket"
+
+# Defaults; uncomment only to override.
+# github_deploy_sa_account_id = "github-deploy"
+# pipeline_sa_account_id      = "elt-pipeline"

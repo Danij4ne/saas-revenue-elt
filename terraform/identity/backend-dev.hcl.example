@@ -1,0 +1,7 @@
+# Remote state for the dev identity root. Copy to backend-dev.hcl (gitignored).
+# Same tfstate bucket as the dev app root, not the prod bucket.
+# Prefix saas-revenue-elt/dev/identity so CD never loads this state.
+# Apply locally with ADC. deploy.yml does not apply this module (DECISIONS #17).
+
+bucket = "your-unique-dev-tfstate-bucket"
+prefix = "saas-revenue-elt/dev/identity"
