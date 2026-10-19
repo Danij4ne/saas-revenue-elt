@@ -1,0 +1,110 @@
+version: 2
+
+models:
+  - name: int_customer_revenue_monthly
+    description: >
+      One row per customer and month on a dense grid (from the customer's
+      first month through as_of_date). Holds that month's customer MRR
+      (active set = active + past_due) and quality flags. Shared base for
+      MRR, ARR, ARPU, churn, expansion and NRR: marts consume it and only
+      apply lag and ratios.
+    tests:
+      - unique:
+          column_name: "(customer_id, month)"
+      # Safety net for the duplicated ('active', 'past_due') lists in the
+      # MRR sum vs the activity count. Drift inflates ARPU (MRR in numerator,
+      # customer missing from the denominator). has_active and mrr = 0 can
+      # be legal (free plan / unknown qty coalesced to 0) — not tested here.
+      - dbt_utils.expression_is_true:
+          name: mrr_positive_implies_active_subscription
+          arguments:
+            expression: "not (mrr > 0 and not has_active_subscription)"
+      # sequential_values catches holes in the middle. This catches a
+      # customer who disappears after churn (no trailing MRR-0 rows through
+      # as_of_date). expression_is_true is row-level (WHERE), so the check
+      # is an uncorrelated IN-subquery, not a window function.
+      - dbt_utils.expression_is_true:
+          name: customer_month_grid_reaches_as_of_date
+          arguments:
+            expression: >-
+              customer_id in (
+                select g.customer_id
+                from {{ ref('int_customer_revenue_monthly') }} as g
+                group by g.customer_id
+                having max(g.month) = date_trunc({{ as_of_date() }}, month)
+              )
+      - dbt_utils.expression_is_true:
+          name: unknown_mrr_flags_are_a_partition
+          arguments:
+            expression: >-
+              subs_missing_qty + subs_missing_plan
+              + subs_unknown_billing_period = subs_with_unknown_qty
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_customers_enriched')
+                field: customer_id
+      - name: month
+        tests:
+          - not_null
+          - dbt_utils.sequential_values:
+              arguments:
+                interval: 1
+                datepart: month
+                group_by_columns: ['customer_id']
+      - name: mrr
+        tests:
+          - not_null
+      - name: has_active_subscription
+        tests:
+          - not_null
+      - name: subs_with_unknown_qty
+        description: >
+          Count of active/past_due lines with null mrr_base (total).
+          Partitioned by subs_missing_qty / subs_missing_plan /
+          subs_unknown_billing_period (DECISIONS #12).
+        tests:
+          # Quality flag: warn so dirty origin quantity does not hard-fail
+          # the run, but the understated MRR is visible.
+          - dbt_utils.expression_is_true:
+              name: no_subs_with_unknown_qty
+              arguments:
+                expression: "= 0"
+              config:
+                severity: warn
+      - name: subs_missing_qty
+        description: >
+          Active/past_due lines with null quantity. Wins over a missing
+          plan on the same row.
+        tests:
+          - dbt_utils.expression_is_true:
+              name: no_subs_missing_qty
+              arguments:
+                expression: "= 0"
+              config:
+                severity: warn
+      - name: subs_missing_plan
+        description: >
+          Active/past_due lines with quantity present and null list_price
+          (left join to plans missed). Subscription plan_id is still set.
+        tests:
+          - dbt_utils.expression_is_true:
+              name: no_subs_missing_plan
+              arguments:
+                expression: "= 0"
+              config:
+                severity: warn
+      - name: subs_unknown_billing_period
+        description: >
+          Active/past_due lines priced from a plan whose billing_period is
+          not month or year.
+        tests:
+          - dbt_utils.expression_is_true:
+              name: no_subs_unknown_billing_period
+              arguments:
+                expression: "= 0"
+              config:
+                severity: warn

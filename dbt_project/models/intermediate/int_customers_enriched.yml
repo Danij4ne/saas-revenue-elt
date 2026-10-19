@@ -1,0 +1,25 @@
+version: 2
+
+models:
+  - name: int_customers_enriched
+    description: >
+      One row per customer, enriched with canonical country and size segment
+      (via seeds). Unmapped values become 'unknown'; the original value is
+      kept in *_raw for audit.
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+      - name: country_code
+        tests:
+          - not_null
+      - name: country_name
+        tests:
+          - not_null
+      - name: size_segment
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['small', 'medium', 'large', 'unknown']

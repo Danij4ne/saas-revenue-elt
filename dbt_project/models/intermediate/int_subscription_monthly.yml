@@ -1,0 +1,39 @@
+version: 2
+
+models:
+  - name: int_subscription_monthly
+    description: >
+      One row per subscription and month in which the subscription had a
+      version in force. Includes status that month, the plan (with monthly
+      equivalent price from current stg_plans, not snapshot_plans;
+      DECISIONS #10) and customer dimensions. Base for MRR, churn and
+      expansion marts; does not filter by status (that decision is downstream).
+    tests:
+      - unique:
+          column_name: "(subscription_id, month)"
+    columns:
+      - name: subscription_id
+        tests:
+          - not_null
+      - name: month
+        tests:
+          - not_null
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_customers_enriched')
+                field: customer_id
+      - name: status_in_month
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['active', 'canceled', 'past_due', 'paused']
+      - name: currency
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['EUR']
