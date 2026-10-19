@@ -1,0 +1,56 @@
+version: 2
+
+models:
+  - name: mart_nrr
+    description: >
+      12-month Net Revenue Retention by cohort. One row per base month: takes
+      customers with MRR > 0 that month and compares their MRR 12 months later
+      (includes expansion, contraction and churn). Only base months with a full
+      12-month window are computed; short history yields few points.
+    columns:
+      - name: base_month
+        tests:
+          - unique
+          - not_null
+      - name: base_mrr
+        tests:
+          - not_null
+      - name: nrr_12m
+        tests:
+          - not_null
+
+# Unit tests: window filter and left join. not_null on nrr_12m cannot prove that a
+# churned customer is kept as 0 or that a short window is dropped.
+# Mock is int_customer_revenue_monthly (the only ref).
+unit_tests:
+  - name: test_incomplete_window_excluded
+    description: >
+      Only base months with 12 months of runway to max(month) are kept.
+      January 2024 has a full window (max is 2025-01-01); February 2024
+      does not, so it must not appear as a cohort row.
+    model: mart_nrr
+    given:
+      - input: ref('int_customer_revenue_monthly')
+        rows:
+          - {customer_id: "c1", month: 2024-01-01, mrr: 100}
+          - {customer_id: "c1", month: 2024-02-01, mrr: 100}
+          - {customer_id: "c1", month: 2025-01-01, mrr: 100}
+    expect:
+      rows:
+        - {base_month: 2024-01-01, base_mrr: 100, retained_mrr: 100, nrr_12m: 1.0}
+
+  - name: test_churned_customer_counts_as_zero
+    description: >
+      A customer in the cohort with no row 12 months later contributes
+      future_mrr = 0 (left join + coalesce), not a dropped row. If the
+      join were inner, NRR would ignore churn and stay at 1.
+    model: mart_nrr
+    given:
+      - input: ref('int_customer_revenue_monthly')
+        rows:
+          - {customer_id: "c1", month: 2024-01-01, mrr: 100}
+          - {customer_id: "c2", month: 2024-01-01, mrr: 100}
+          - {customer_id: "c2", month: 2025-01-01, mrr: 100}
+    expect:
+      rows:
+        - {base_month: 2024-01-01, base_mrr: 200, retained_mrr: 100, nrr_12m: 0.5}

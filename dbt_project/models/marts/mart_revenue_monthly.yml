@@ -1,0 +1,72 @@
+version: 2
+
+models:
+  - name: mart_revenue_monthly
+    description: >
+      One row per month with company-level recurring revenue metrics: MRR,
+      ARR (MRR x 12), ARPU (MRR / active customers) and subs_missing_qty
+      (active/past_due lines with null quantity, summed across customers).
+      Built from int_customer_revenue_monthly (active set = active + past_due).
+      Those lines are already inside mrr as 0; the flag does not change it.
+    tests:
+      - dbt_utils.expression_is_true:
+          name: arr_is_mrr_times_12
+          arguments:
+            expression: "arr = mrr * 12"
+      - dbt_utils.expression_is_true:
+          name: arpu_matches_mrr_over_active_customers
+          arguments:
+            expression: >-
+              arpu = case
+                when active_customers > 0 then mrr / active_customers
+                else 0
+              end
+    columns:
+      - name: month
+        tests:
+          - unique
+          - not_null
+          # unique/not_null pass on zero rows. If as_of_date is below the
+          # first observed month, generate_date_array is empty and marts
+          # stay empty in green. Do not copy this onto mart_nrr: a short
+          # history can legally yield no 12-month window.
+          - dbt_utils.at_least_one
+      - name: mrr
+        tests:
+          - not_null
+      - name: arr
+        tests:
+          - not_null
+      - name: active_customers
+        tests:
+          - not_null
+      - name: arpu
+        tests:
+          - not_null
+      - name: subs_missing_qty
+        description: >
+          Count of active/past_due subscription lines in the month whose
+          quantity was null. Sum of int_customer_revenue_monthly.subs_missing_qty.
+          The unit is lines, not customers. Those lines are already inside
+          mrr as 0; this column does not change mrr, arr or arpu.
+        tests:
+          - not_null
+
+# Unit test: the monthly count is a sum across customers. not_null cannot
+# prove that two customer-month line counts become one company-month total,
+# nor that mrr stays the sum of the already-coalesced customer MRR.
+unit_tests:
+  - name: test_subs_missing_qty_sums_across_customers
+    description: >
+      Two customers in the same month contribute subs_missing_qty 2 and 1.
+      The published month is 3 lines, not 2 customers. MRR stays 150
+      (100 + 50); ARR and ARPU follow that number.
+    model: mart_revenue_monthly
+    given:
+      - input: ref('int_customer_revenue_monthly')
+        rows:
+          - {customer_id: "c1", month: 2024-01-01, mrr: 100, has_active_subscription: true, subs_missing_qty: 2}
+          - {customer_id: "c2", month: 2024-01-01, mrr: 50, has_active_subscription: true, subs_missing_qty: 1}
+    expect:
+      rows:
+        - {month: 2024-01-01, mrr: 150, arr: 1800, active_customers: 2, arpu: 75, subs_missing_qty: 3}

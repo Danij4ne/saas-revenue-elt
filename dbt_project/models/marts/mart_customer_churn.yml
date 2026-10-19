@@ -1,0 +1,36 @@
+version: 2
+
+models:
+  - name: mart_customer_churn
+    description: >
+      One row per month with logo churn and MRR amounts moved that month.
+      customer_churn_rate = customers who fell to MRR 0 divided by those who
+      had MRR the prior month. Includes expansion_mrr and contraction_mrr
+      for a joint read of revenue dynamics.
+    tests:
+      # Sign of the aggregation vs mrr_delta (churn/contraction negate).
+      # Complements assert_mrr_movement_consistency (label vs numbers per row).
+      - dbt_utils.expression_is_true:
+          name: churn_movement_amounts_non_negative
+          arguments:
+            expression: "churned_mrr >= 0 and expansion_mrr >= 0 and contraction_mrr >= 0"
+    columns:
+      - name: month
+        tests:
+          - unique
+          - not_null
+      - name: active_customers_start
+        tests:
+          - not_null
+      - name: churned_customers
+        tests:
+          - not_null
+      - name: churned_mrr
+        tests:
+          - not_null
+      - name: expansion_mrr
+        tests:
+          - not_null
+      - name: contraction_mrr
+        tests:
+          - not_null

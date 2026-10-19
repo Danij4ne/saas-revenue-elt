@@ -1,0 +1,28 @@
+version: 2
+
+# Declares who consumes the marts layer, so the docs DAG does not end at
+# mart_* and impact analysis includes the downstream reader
+# (dbt build --select +exposure:revenue_dashboard).
+# One exposure because there is one consumption today: reading revenue.
+# Split it only when a second real reader exists (per-owner, per-grain).
+exposures:
+  - name: revenue_dashboard
+    label: Revenue dashboard (MRR, churn, NRR)
+    type: dashboard
+    # low on purpose: no BI tool is wired yet, so there is no url either.
+    # This declares the intended consumption contract of the marts layer,
+    # not a dashboard that exists today.
+    maturity: low
+    description: >
+      Monthly recurring revenue reporting: MRR / ARR / ARPU, MRR movements,
+      logo churn and 12-month NRR. Reads the marts layer only, never staging
+      or snapshots. Metric definitions and grain live in
+      docs/DATA_CONTRACT.md; the analytical cutoff is the as_of_date var.
+    depends_on:
+      - ref('mart_revenue_monthly')
+      - ref('mart_mrr_movements')
+      - ref('mart_customer_churn')
+      - ref('mart_nrr')
+    owner:
+      name: Daniel Jane
+      email: danij4ne@gmail.com

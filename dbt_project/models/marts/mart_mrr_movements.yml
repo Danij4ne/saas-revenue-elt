@@ -1,0 +1,79 @@
+version: 2
+
+models:
+  - name: mart_mrr_movements
+    description: >
+      One row per customer and month classifying the MRR change vs the prior
+      month: new, reactivation, expansion, contraction, churn or flat. Base
+      for expansion and churn metrics. mrr_delta is the MRR change that month
+      (positive = expansion/new, negative = contraction/churn).
+    tests:
+      - unique:
+          column_name: "(customer_id, month)"
+    columns:
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('int_customers_enriched')
+                field: customer_id
+      - name: month
+        tests:
+          - not_null
+      - name: movement_type
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['new', 'reactivation', 'expansion', 'contraction', 'churn', 'flat']
+
+# Unit tests: CASE + lag. accepted_values cannot tell new from reactivation.
+# Mock is int_customer_revenue_monthly (the only ref). Dense months so lag
+# is the prior calendar month, not an arbitrary previous row.
+unit_tests:
+  - name: test_new_vs_reactivation
+    description: >
+      First positive month is new (prev_mrr is null). After a 0 month,
+      the next positive month is reactivation (prev_mrr = 0), not new.
+      The middle 0 row is churn by construction of the dense grid.
+    model: mart_mrr_movements
+    given:
+      - input: ref('int_customer_revenue_monthly')
+        rows:
+          - {customer_id: "c1", month: 2024-01-01, mrr: 100}
+          - {customer_id: "c1", month: 2024-02-01, mrr: 0}
+          - {customer_id: "c1", month: 2024-03-01, mrr: 100}
+    expect:
+      rows:
+        - {customer_id: "c1", month: 2024-01-01, mrr: 100, prev_mrr: null, mrr_delta: 100, movement_type: new}
+        - {customer_id: "c1", month: 2024-02-01, mrr: 0, prev_mrr: 100, mrr_delta: -100, movement_type: churn}
+        - {customer_id: "c1", month: 2024-03-01, mrr: 100, prev_mrr: 0, mrr_delta: 100, movement_type: reactivation}
+
+  - name: test_churn
+    description: >
+      Positive MRR followed by 0 is churn, not flat or contraction.
+    model: mart_mrr_movements
+    given:
+      - input: ref('int_customer_revenue_monthly')
+        rows:
+          - {customer_id: "c1", month: 2024-01-01, mrr: 100}
+          - {customer_id: "c1", month: 2024-02-01, mrr: 0}
+    expect:
+      rows:
+        - {customer_id: "c1", month: 2024-01-01, mrr: 100, prev_mrr: null, mrr_delta: 100, movement_type: new}
+        - {customer_id: "c1", month: 2024-02-01, mrr: 0, prev_mrr: 100, mrr_delta: -100, movement_type: churn}
+
+  - name: test_first_month_zero_is_flat
+    description: >
+      First month with mrr = 0 (prev_mrr null) hits the CASE else branch
+      (flat), not new or churn. Rare in the snapshot; the contract still
+      defines it.
+    model: mart_mrr_movements
+    given:
+      - input: ref('int_customer_revenue_monthly')
+        rows:
+          - {customer_id: "c1", month: 2024-01-01, mrr: 0}
+    expect:
+      rows:
+        - {customer_id: "c1", month: 2024-01-01, mrr: 0, prev_mrr: null, mrr_delta: 0, movement_type: flat}
