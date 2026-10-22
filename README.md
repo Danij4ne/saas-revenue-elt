@@ -35,6 +35,22 @@ The marts published today are single-currency `EUR`:
 
 The published contract for grain, metrics, compatibility, PII, and SLA is in [docs/DATA_CONTRACT.md](docs/DATA_CONTRACT.md).
 
+### As of December 2025
+
+Catalog EUR, capped at `2025-12-31`. MRR and churn are that month. The NRR base month is December 2024, the latest cohort with a full 12-month window.
+
+![December 2025 MRR, ARR, active customers, and ARPU](docs/images/results/results_mrr_2025_12.png)
+
+December 2025 catalog MRR is €817,802 across 516 active customers (€1,584.89 ARPU). ARR is that MRR times 12.
+
+![December 2025 logo churn, churned MRR, expansion, and contraction](docs/images/results/results_churn_2025_12.png)
+
+One of the 512 customers with MRR in November churned in December (0.2%), taking €2,970. Expansion that month was €0 and contraction was €1,025.
+
+![12-month NRR for the December 2024 cohort](docs/images/results/results_nrr_2024_12.png)
+
+The December 2024 cohort retained €738,866 of €709,964 twelve months later: 104.1% NRR. Customers acquired after that month stay outside this ratio.
+
 ## How to check it
 
 The local checks do not need a cloud project: `uv run pytest`, and step 5 of the Quick start, which validates the parquet files against the contract. With a configured `.env` file and Google Application Default Credentials, `dbt build` runs the warehouse tests. The command list below is that path. Suites are in [docs/TESTING.md](docs/TESTING.md).
