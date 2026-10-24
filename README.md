@@ -18,7 +18,7 @@ Detail is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 Three choices that change what the numbers mean. The full record is in [docs/DECISIONS.md](docs/DECISIONS.md).
 
-- **MRR uses today's catalog price.** Past months are priced with the plan's current `list_price`, because the plans file keeps one current row per plan, not a price history. `snapshot_plans` exists, but no mart reads it yet: a snapshot only records changes from the day it starts running, so it cannot recover the prices of 2023–2025. `valid_from` and `valid_to` say when a subscription was active, not what the plan cost. If Pro goes from 20 to 30, the whole series is recalculated at 30. The snapshot becomes useful once a real price change has been recorded.
+- **MRR uses today's catalog price.** Every month through `2025-12-31` is priced with the current `list_price` from `stg_plans`, not with a guaranteed historical sale-time price. `snapshot_plans` exists, but it only records plan changes from the day the snapshot starts running, so it cannot reconstruct prices for 2023–2025. Joining it today would therefore not make past MRR historically correct. `valid_from` and `valid_to` say when a subscription was active, not what the plan cost. If Pro goes from 20 to 30, the whole series is recalculated at 30. The snapshot becomes useful once that change has actually been captured.
 - `raw` **is append-only.** Each run writes `_run_date`, `_run_id`, and `_ingested_at` and lands in its own GCS path. This preserves load history and avoids silent overwrites. Business history such as price or country is not modeled in the load layer. A retry uses a new `run_id`, because appending the same job twice would duplicate rows.
 - **The monthly spine stops at `as_of_date`.** The source dump ends at `2025-12-31`, so the models are capped there instead of using the machine clock. This keeps churn and NRR reproducible: running the same snapshot in 2026 does not create extra empty months. If a row appears after the cutoff, the tests fail instead of stretching the series silently.
 
@@ -53,7 +53,7 @@ The December 2024 cohort retained €738,866 of €709,964 twelve months later: 
 
 ## How to check it
 
-The local checks do not need a cloud project: `uv run pytest`, and step 5 of the Quick start, which validates the parquet files against the contract. With a configured `.env` file and Google Application Default Credentials, `dbt build` runs the warehouse tests. The command list below is that path. Suites are in [docs/TESTING.md](docs/TESTING.md).
+The local checks do not need a cloud project: `uv run pytest`, plus step 5 of the Quick start, which validates the parquet files against the raw contract. With a configured `.env` file and Google Application Default Credentials, `dbt build` runs the warehouse tests in BigQuery. Suites and commands are in [docs/TESTING.md](docs/TESTING.md).
 
 ## What I would do next
 
@@ -76,7 +76,7 @@ The local checks do not need a cloud project: `uv run pytest`, and step 5 of the
 ## What this repo does
 
 - The orchestrator coordinates. Business logic stays in Python and dbt.
-- dbt snapshots exist for SCD2, but published marts still read `stg_*`, not `snapshot_*`.
+- dbt snapshots exist for SCD2, but the published marts still use the current state from `stg_plans` through intermediate models, not snapshot history.
 
 
 
