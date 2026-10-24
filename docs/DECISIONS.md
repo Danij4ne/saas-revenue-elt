@@ -90,17 +90,17 @@ They follow pipeline order. A new decision takes the next free integer.
 
 ### Decision 10. MRR uses the current catalog price
 
-- `Context`: `int_subscription_monthly` joins `stg_plans`. The `list_price` of January 2024 is today's. `snapshot_plans` exists and no mart reads it. A snapshot only accumulates from the first run; it does not reconstruct 2023–2025.
+- `Context`: `int_subscription_monthly` joins `stg_plans`. The `list_price` of January 2024 is today's. `snapshot_plans` exists, but it only records plan versions from the day the snapshot starts running, so it cannot reconstruct prices for 2023–2025.
 - `Decision`: every month through `as_of_date` uses `stg_plans`. Intermediate and marts do not read `snapshot_plans` or `snapshot_customers`.
-- `Why`: joining the snapshot now would null out old months or return to the same price. Subscription history is already in `valid_from` / `valid_to`.
-- `Consequences`: if Pro goes from 20 to 30, the whole series is recalculated at 30. That is the moment to plug in the snapshot, not before.
+- `Why`: joining the snapshot today would not make historical MRR correct, because the old months still have no guaranteed historical price to join to. Subscription history is already in `valid_from` / `valid_to`; price history is not.
+- `Consequences`: if Pro goes from 20 to 30, the whole series is recalculated at 30. Once that price change has actually been captured in the snapshot, it becomes meaningful to plug the snapshot into the marts.
 
 ### Decision 11. Intermediate and marts are full refresh
 
-- `Context`: cost grows with subscriptions × months. The current dump does not justify it. A badly closed incremental makes `lag(mrr)` mark everything as `new`.
-- `Decision`: `+materialized: table` on intermediate and marts. No `incremental`, no `partition_by` or `cluster_by`.
-- `Why`: partitioning a lab table does not cheapen a full refresh. The spine `cross join` is the monthly explosion, not an accidental cartesian product.
-- `Consequences`: every `dbt build` rewrites int and marts. Incremental waits until ingestion is a real delta (B15 in the ROADMAP).
+- `Context`: the current source is a closed historical dump, not a real delta feed. `int_customer_revenue_monthly` builds a dense customer-month grid through `as_of_date`, and marts such as churn, movements, and NRR depend on comparing each month against the previous one. A badly closed incremental can therefore miss months, break `lag(mrr)`, and classify existing customers as `new`.
+- `Decision`: `+materialized: table` on intermediate and marts. No `incremental`, no `partition_by`, and no `cluster_by`.
+- `Why`: full refresh is the safest way to keep monthly metrics reproducible while the input is still a frozen dump. The expensive step is the intentional subscription × month spine, not an avoidable storage layout problem. Incremental logic would add correctness risk before it adds meaningful savings.
+- `Consequences`: every `dbt build` rewrites intermediate and marts from the same frozen input, so the same dump yields the same MRR, churn, movements, and NRR. Incremental models wait until ingestion becomes a real delta feed and the close/rebuild rules can be defined explicitly.
 
 ### Decision 12. The unknown-MRR flag stays; the causes are added
 
